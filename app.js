@@ -77,6 +77,22 @@ async function init() {
 async function onSubmit(e) {
   e.preventDefault();
   hideError();
+
+  // Validate inputs up front with clear user-visible errors, since the
+  // browser's native `required` validation tooltip is easy to miss.
+  const videoUrl = (els.videoUrl.value || "").trim();
+  const transcript = (els.transcript.value || "").trim();
+  if (!videoUrl && !transcript) {
+    showError("Paste a YouTube link in the field above before clicking Grade.");
+    els.videoUrl.focus();
+    return;
+  }
+  if (videoUrl && !/^https?:\/\//i.test(videoUrl)) {
+    showError("That doesn't look like a URL. Try a YouTube link starting with https://");
+    els.videoUrl.focus();
+    return;
+  }
+
   els.results.classList.add("hidden");
   els.statusCard.classList.remove("hidden");
   els.submit.disabled = true;
