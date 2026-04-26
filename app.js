@@ -14,7 +14,6 @@ const els = {
   transcript: document.getElementById("transcript"),
   backendUrl: document.getElementById("backend-url"),
   submit: document.getElementById("submit-btn"),
-  demo: document.getElementById("demo-btn"),
   statusCard: document.getElementById("status-card"),
   statusText: document.getElementById("status-text"),
   errorCard: document.getElementById("error-card"),
@@ -72,7 +71,6 @@ async function init() {
   els.form.addEventListener("submit", onSubmit);
   els.copyJson.addEventListener("click", copyJson);
   els.newGrade.addEventListener("click", reset);
-  if (els.demo) els.demo.addEventListener("click", loadDemoData);
 }
 
 // ----- submit handler -----
@@ -349,50 +347,6 @@ function copyJson() {
     els.copyJson.textContent = "Copied!";
     setTimeout(() => (els.copyJson.textContent = "Copy raw JSON"), 1500);
   });
-}
-
-// ----- demo data -----
-function loadDemoData() {
-  hideError();
-  els.statusCard.classList.add("hidden");
-  // Build mock scores: most green, a few mixed, one red on a non-Essential, all
-  // Essentials green except a deliberate grey to show the failed-Essential path.
-  const allCriteria = RUBRIC.sections.flatMap((s) => s.criteria);
-  const scores = {};
-  for (const c of allCriteria) {
-    let value = "green";
-    let rationale = "Practitioner consistently demonstrated this practice in the conversation.";
-    let quote = "";
-    if (c.id === 3) {
-      value = "grey";
-      rationale = "Confidence scale was introduced late and only partially clarified.";
-      quote = "So… maybe like a 7 out of 10? I'm not sure how this scale works.";
-    } else if (c.id === 16) {
-      value = "grey";
-      rationale = "Truth concept was touched on but not deeply explored.";
-    } else if (c.id === 23) {
-      value = "red";
-      rationale = "Practitioner showed visible frustration partway through.";
-      quote = "Look, I just don't see how that follows from anything you've said.";
-    } else if (c.id === 7) {
-      quote = "How did you come to feel that confident in that?";
-    } else if (c.id === 17) {
-      quote = "Help me understand the path that got you to this view.";
-    } else if (c.id === 18) {
-      quote = "What would change your mind?";
-    }
-    scores[c.id] = { value, rationale, quote };
-  }
-  LAST_RESULT = {
-    scores,
-    narrative:
-      "This is sample data illustrating the UI, not a real grade. The practitioner generally followed SE methodology — eliciting reasons, asking how-questions, exploring testability — but had a moment of visible frustration (#23) and didn't fully clarify the confidence scale (#3). All six SE Essentials are green, so this would count as Street Epistemology under the rubric's policy.",
-    practitionerIdentified: "Sample Practitioner",
-    videoMeta: { title: "[Demo] Sample SE conversation", channel: "Sample channel" },
-    transcriptPreview: "(This is demo data — no real video was analyzed.)",
-  };
-  render(LAST_RESULT);
-  els.results.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function escapeHtml(s) {
