@@ -1,15 +1,22 @@
 /**
- * SE Conversation Grader — Vercel Serverless Function
+ * SE Conversation Grader — Vercel Serverless Function (Gemini-powered)
  *
  * Endpoint: POST /api/analyze
  * Body: { videoUrl?, practitioner?, transcript?, rubric }
  *
- * Environment variable (set in Vercel dashboard → Settings → Environment Variables):
- *   ANTHROPIC_API_KEY   — required
+ * Environment variables:
+ *   GEMINI_API_KEY      — required. Create at https://ai.google.dev
  *   ALLOWED_ORIGINS     — optional, comma-separated; defaults to "*"
+ *
+ * Why Gemini: critical reflection in SE shows up as visible pauses, eye
+ * direction changes, and contemplative body language — invisible in a
+ * transcript. Gemini 2.5 Flash analyzes the actual video, including audio,
+ * directly from a YouTube URL. Claude (transcript-only) was the v1 backend
+ * but missed the SE-essential visual signals.
  */
 
-const ANTHROPIC_MODEL = "claude-sonnet-4-5-20250929";
+const GEMINI_MODEL = "gemini-2.5-flash";
+const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 const MAX_TRANSCRIPT_CHARS = 60000;
 
 export default async function handler(req, res) {
@@ -26,16 +33,10 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.setHeader("Vary", "Origin");
 
-  if (req.method === "OPTIONS") {
-    return res.status(204).end();
-  }
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return res
-      .status(500)
-      .json({ error: "Server misconfigured: ANTHROPIC_API_KEY environment variable not set." });
+  if (req.method === "OPTIONS") return res.status(204).end();
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+  if (!process.env.GEMINI_API_KEY) {
+    return res.status(500).json({ error: "Server misconfigured: GEMINI_API_KEY environment variable not set." });
   }
 
   try {
@@ -44,46 +45,35 @@ export default async function handler(req, res) {
     if (!rubric || !rubric.sections) {
       return res.status(400).json({ error: "Missing rubric in request body." });
     }
+    if (!videoUrl && !transcript) {
+      return res.status(400).json({ error: "Provide either videoUrl or transcript." });
+    }
 
-    let transcriptText = (transcript || "").trim();
     let videoMeta = {};
-    if (!transcriptText) {
-      if (!videoUrl) {
-        return res.status(400).json({ error: "Provide either videoUrl or transcript." });
-      }
+    let transcriptText = (transcript || "").trim();
+    if (videoUrl) {
       const videoId = extractVideoId(videoUrl);
       if (!videoId) {
         return res.status(400).json({ error: "Couldn't parse a YouTube video ID from that URL." });
       }
-      const fetched = await fetchYouTubeTranscript(videoId);
-      transcriptText = fetched.text;
-      videoMeta = { videoId, title: fetched.title, channel: fetched.channel };
+      videoMeta = { videoId };
     }
-
-    if (!transcriptText) {
-      return res.status(422).json({
-        error:
-          "No transcript available. The video may be private, lack captions, or YouTube changed their format. Paste a transcript directly under Advanced.",
-      });
-    }
-
     if (transcriptText.length > MAX_TRANSCRIPT_CHARS) {
-      transcriptText =
-        transcriptText.slice(0, MAX_TRANSCRIPT_CHARS) +
-        "\n\n[transcript truncated for length]";
+      transcriptText = transcriptText.slice(0, MAX_TRANSCRIPT_CHARS) + "\n\n[transcript truncated]";
     }
 
-    const scored = await scoreWithClaude({
-      apiKey: process.env.ANTHROPIC_API_KEY,
+    const scored = await scoreWithGemini({
+      apiKey: process.env.GEMINI_API_KEY,
       rubric,
-      transcript: transcriptText,
+      videoUrl: videoUrl || null,
+      transcript: transcriptText || null,
       practitioner: practitioner || null,
     });
 
     return res.status(200).json({
       ...scored,
       videoMeta,
-      transcriptPreview: transcriptText.slice(0, 600),
+      transcriptPreview: transcriptText ? transcriptText.slice(0, 600) : "",
     });
   } catch (err) {
     console.error(err);
@@ -91,10 +81,186 @@ export default async function handler(req, res) {
   }
 }
 
-// ----- helpers (port of the worker logic) -----
+// ----- Gemini scoring -----
+
+async function scoreWithGemini({ apiKey, rubric, videoUrl, transcript, practitioner }) {
+  const systemPrompt = buildSystemPrompt();
+  const userPrompt = buildUserPrompt({ rubric, transcript, practitioner, hasVideo: !!videoUrl });
+  const responseSchema = buildResponseSchema(rubric);
+
+  const userParts = [];
+  if (videoUrl) {
+    userParts.push({
+      file_data: { file_uri: videoUrl, mime_type: "video/youtube" },
+    });
+  }
+  userParts.push({ text: userPrompt });
+
+  const body = {
+    system_instruction: { parts: [{ text: systemPrompt }] },
+    contents: [{ role: "user", parts: userParts }],
+    generation_config: {
+      response_mime_type: "application/json",
+      response_schema: responseSchema,
+      max_output_tokens: 16000,
+      temperature: 0.2,
+    },
+  };
+
+  const r = await fetch(`${GEMINI_ENDPOINT}?key=${encodeURIComponent(apiKey)}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) {
+    const t = await r.text();
+    throw new Error("Gemini API error " + r.status + ": " + t.slice(0, 800));
+  }
+  const data = await r.json();
+
+  // Extract the JSON response. Gemini returns it as a text part with mimeType application/json.
+  const candidate = (data.candidates || [])[0];
+  if (!candidate) throw new Error("Gemini returned no candidates: " + JSON.stringify(data).slice(0, 400));
+  const finishReason = candidate.finishReason || "";
+  const partText = (candidate.content?.parts || []).map((p) => p.text || "").join("");
+  if (!partText) {
+    throw new Error("Gemini returned no text content. Finish reason: " + finishReason);
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(partText);
+  } catch (e) {
+    throw new Error("Gemini response was not valid JSON: " + partText.slice(0, 300));
+  }
+
+  const scoresById = {};
+  for (const s of parsed.scores || []) {
+    scoresById[s.id] = {
+      value: ["green", "grey", "red", "na"].includes(s.value) ? s.value : "na",
+      rationale: s.rationale || "",
+      quote: s.quote || "",
+      visualCue: s.visualCue || "",
+    };
+  }
+  return {
+    scores: scoresById,
+    narrative: parsed.narrative || "",
+    practitionerIdentified: parsed.practitionerIdentified || practitioner || null,
+  };
+}
+
+function buildSystemPrompt() {
+  return [
+    "You are an expert grader of Street Epistemology (SE) conversations.",
+    "Your scoring contract is the SE Conversation Rubric the user provides.",
+    "The gold standard for SE practice is defined by the Navigating Beliefs course (navigatingbeliefs.com).",
+    "",
+    "You will be given either:",
+    "  (a) a YouTube video, which you should watch in full (audio + visuals), OR",
+    "  (b) a transcript-only paste, which you should grade text-only.",
+    "",
+    "When you have video, the visual layer is critical for SE. Watch for:",
+    "  - PAUSES + UPWARD/DISTANT GAZE: the practitioner asks a probing question, the interlocutor pauses 2+ seconds with eyes drifting up/away. This is critical reflection — the SE-essential signal.",
+    "  - Body-language shifts (leaning in, slowing down, going quiet) that indicate genuine engagement.",
+    "  - Tone changes — a softening or thoughtful slowdown vs. defensive escalation.",
+    "  - Facial cues — surprise, contemplation, dawning realization vs. dismissal or annoyance.",
+    "  - Pace — does the practitioner give space for thinking, or rush past it?",
+    "",
+    "Score definitions:",
+    '  - "green": clear positive evidence the practitioner used the recommended practice.',
+    '  - "grey": mixed evidence OR insufficient evidence either way.',
+    '  - "red":  clear evidence of the inappropriate / detrimental practice.',
+    '  - "na":   the criterion does not apply to this conversation. Use sparingly; prefer "grey" when uncertain.',
+    "",
+    "Scoring rules:",
+    "1. Identify which speaker is the SE practitioner (the one asking probing questions about beliefs, not the believer).",
+    "2. For every criterion, judge ONLY the practitioner's behavior — not the interlocutor's.",
+    "3. For each score, provide:",
+    "   - rationale (1–2 sentences),",
+    "   - quote (a short verbatim line from the conversation, ≤30 words, when applicable; otherwise empty),",
+    "   - visualCue (a short observation about visible behavior — e.g. 'interlocutor pauses ~5s, eyes up-left, then says...'; empty when text-only or no relevant visual moment).",
+    "4. Be conservative on the six SE Essentials (#1, #17, #18, #19, #37, #38). Mark them green only with clear positive evidence; otherwise grey.",
+    "5. CRITICAL REFLECTION (#19): only green when you observe specific moments where the practitioner's question successfully prompted the interlocutor into visible deep thinking — pause, look-up, slowed speech, hedging language like 'hmm I never thought of that.' Without those moments, max grey.",
+    "6. If a phase is absent (e.g., no closing), mark phase-specific criteria 'na', not 'red'.",
+    "7. Provide a 3–5 sentence narrative summarizing strengths, weaknesses, and whether this counts as SE.",
+    "",
+    "Be calibrated. Don't be charitable to confrontational debate framed as SE. Don't penalize legitimate clarification questions as 'leading'.",
+    "Return ONLY the JSON specified by the response schema. Include every criterion ID listed in the rubric.",
+  ].join("\n");
+}
+
+function buildUserPrompt({ rubric, transcript, practitioner, hasVideo }) {
+  const rubricText = rubric.sections
+    .map((s) => {
+      const lines = s.criteria
+        .map(
+          (c) =>
+            `  #${c.id}${rubric.essentialIds.includes(c.id) ? " ★" : ""}: ` +
+            `recommended = "${c.recommended}" | detrimental = "${c.detrimental}"`
+        )
+        .join("\n");
+      return `Section ${s.id}: ${s.title}\n${lines}`;
+    })
+    .join("\n\n");
+
+  const lines = [
+    `Rubric (★ = SE Essential — must be green for the conversation to count as SE):`,
+    "",
+    rubricText,
+    "",
+    practitioner
+      ? `The SE practitioner is identified as: ${practitioner}.`
+      : "The SE practitioner is not identified — infer from the conversation.",
+  ];
+
+  if (hasVideo) {
+    lines.push("", "Watch the video above (audio + visuals) and score it. Pay particular attention to visible pauses, looking-up gestures, and body-language shifts that indicate critical reflection.");
+  } else if (transcript) {
+    lines.push("", `Transcript:\n"""\n${transcript}\n"""`, "", "Score this conversation from the transcript. You won't have visual cues — leave visualCue empty for each criterion and rely on the text.");
+  }
+  lines.push("", "Return JSON matching the response schema. Include every criterion ID in scores.");
+  return lines.join("\n");
+}
+
+function buildResponseSchema(rubric) {
+  // Gemini's response_schema uses a subset of OpenAPI 3.0 schemas.
+  const allIds = rubric.sections.flatMap((s) => s.criteria.map((c) => c.id));
+  return {
+    type: "object",
+    properties: {
+      practitionerIdentified: {
+        type: "string",
+        description: "Name or short identifier of the SE practitioner.",
+      },
+      narrative: {
+        type: "string",
+        description: "3–5 sentence overall summary: strengths, weaknesses, and whether this counts as SE.",
+      },
+      scores: {
+        type: "array",
+        description: "One entry per rubric criterion. Include every ID.",
+        items: {
+          type: "object",
+          properties: {
+            id: { type: "integer" },
+            value: { type: "string", enum: ["green", "grey", "red", "na"] },
+            rationale: { type: "string", description: "1–2 sentences justifying the score." },
+            quote: { type: "string", description: "Short verbatim quote (≤30 words) or empty." },
+            visualCue: { type: "string", description: "Visible behavior supporting the score, or empty if text-only or none observed." },
+          },
+          required: ["id", "value", "rationale"],
+        },
+      },
+    },
+    required: ["scores", "narrative"],
+    propertyOrdering: ["practitionerIdentified", "narrative", "scores"],
+  };
+}
+
+// ----- helpers -----
 
 function readJsonBody(req) {
-  // On Vercel Node runtime, req.body is auto-parsed if Content-Type is JSON.
   if (req.body && typeof req.body === "object") return Promise.resolve(req.body);
   return new Promise((resolve, reject) => {
     let raw = "";
@@ -110,63 +276,6 @@ function readJsonBody(req) {
   });
 }
 
-async function fetchYouTubeTranscript(videoId) {
-  const watchUrl = `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}&hl=en`;
-  const r = await fetch(watchUrl, {
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-      "Accept-Language": "en-US,en;q=0.9",
-    },
-  });
-  if (!r.ok) throw new Error("YouTube watch page returned HTTP " + r.status);
-  const html = await r.text();
-
-  const title =
-    matchOnce(html, /<meta name="title" content="([^"]+)"/) ||
-    (matchOnce(html, /<title>([^<]+)<\/title>/) || "").replace(/ - YouTube$/, "");
-  const channel = matchOnce(html, /"author":"([^"]+)"/);
-
-  const captionTracks = extractCaptionTracks(html);
-  if (!captionTracks.length) {
-    throw new Error("This video has no captions available.");
-  }
-
-  const pick =
-    captionTracks.find((t) => /^en/i.test(t.languageCode) && t.kind !== "asr") ||
-    captionTracks.find((t) => /^en/i.test(t.languageCode)) ||
-    captionTracks[0];
-
-  const trackUrl = pick.baseUrl + (pick.baseUrl.includes("?") ? "&" : "?") + "fmt=json3";
-  const tr = await fetch(trackUrl);
-  if (!tr.ok) throw new Error("Caption track fetch failed: HTTP " + tr.status);
-  const tj = await tr.json();
-
-  const lines = [];
-  for (const evt of tj.events || []) {
-    if (!evt.segs) continue;
-    const text = evt.segs
-      .map((s) => s.utf8 || "")
-      .join("")
-      .replace(/\n/g, " ")
-      .trim();
-    if (text) lines.push(text);
-  }
-  return { text: lines.join(" "), title, channel };
-}
-
-function extractCaptionTracks(html) {
-  const m = html.match(/ytInitialPlayerResponse\s*=\s*({[\s\S]*?})\s*;\s*var/);
-  if (!m) return [];
-  try {
-    const obj = JSON.parse(m[1]);
-    const tracks = obj?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-    return Array.isArray(tracks) ? tracks : [];
-  } catch (_) {
-    return [];
-  }
-}
-
 function extractVideoId(input) {
   if (!input) return null;
   if (/^[a-zA-Z0-9_-]{11}$/.test(input.trim())) return input.trim();
@@ -180,145 +289,4 @@ function extractVideoId(input) {
     }
   } catch (_) {}
   return null;
-}
-
-function matchOnce(s, re) {
-  const m = s.match(re);
-  return m ? m[1] : null;
-}
-
-async function scoreWithClaude({ apiKey, rubric, transcript, practitioner }) {
-  const system = buildSystemPrompt();
-  const user = buildUserPrompt({ rubric, transcript, practitioner });
-  const tool = buildScoreTool(rubric);
-
-  const r = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      model: ANTHROPIC_MODEL,
-      max_tokens: 8000,
-      system,
-      tools: [tool],
-      tool_choice: { type: "tool", name: "submit_scores" },
-      messages: [{ role: "user", content: user }],
-    }),
-  });
-
-  if (!r.ok) {
-    const errText = await r.text();
-    throw new Error("Anthropic API error " + r.status + ": " + errText.slice(0, 500));
-  }
-  const data = await r.json();
-  const block = (data.content || []).find(
-    (c) => c.type === "tool_use" && c.name === "submit_scores"
-  );
-  if (!block || !block.input) throw new Error("Model did not return tool output.");
-
-  const out = block.input;
-  const scoresById = {};
-  for (const s of out.scores || []) {
-    scoresById[s.id] = {
-      value: ["green", "grey", "red", "na"].includes(s.value) ? s.value : "na",
-      rationale: s.rationale || "",
-      quote: s.quote || "",
-    };
-  }
-  return {
-    scores: scoresById,
-    narrative: out.narrative || "",
-    practitionerIdentified: out.practitionerIdentified || practitioner || null,
-  };
-}
-
-function buildSystemPrompt() {
-  return [
-    "You are an expert grader of Street Epistemology (SE) conversations.",
-    "Your scoring contract is the SE Conversation Rubric the user provides.",
-    "The gold standard for what constitutes good SE practice is defined by the Navigating Beliefs course (navigatingbeliefs.com).",
-    "",
-    "Definitions:",
-    '- "green": the practitioner clearly used the recommended practice for this criterion.',
-    '- "grey": evidence is mixed (some recommended, some detrimental) OR there is insufficient evidence either way.',
-    '- "red":  the practitioner clearly used the inappropriate / detrimental practice.',
-    '- "na":   the criterion does not apply to this conversation (use sparingly; prefer "grey" when uncertain).',
-    "",
-    "Scoring instructions:",
-    "1. Identify which speaker is the SE practitioner (the one asking probing questions about beliefs, not the believer being explored).",
-    "2. For every criterion in the rubric, judge ONLY the practitioner's behavior — not the interlocutor's.",
-    "3. Quote a short verbatim excerpt from the transcript when possible (under 30 words). If no specific moment applies, leave quote empty and rely on rationale.",
-    "4. Be conservative on the six SE Essentials (#1, #17, #18, #19, #37, #38). Only mark them green if you have clear positive evidence; otherwise grey.",
-    "5. If the transcript is missing entire phases (e.g., no opening or closing), mark phase-specific criteria 'na', not 'red'.",
-    "6. Provide a 3-5 sentence narrative summarizing strengths, weaknesses, and whether this counts as SE.",
-    "",
-    "Be calibrated. Do not be charitable to confrontational debate framed as SE. Do not penalize legitimate clarification questions as 'leading'.",
-  ].join("\n");
-}
-
-function buildUserPrompt({ rubric, transcript, practitioner }) {
-  const rubricText = rubric.sections
-    .map((s) => {
-      const lines = s.criteria
-        .map(
-          (c) =>
-            `  #${c.id}${rubric.essentialIds.includes(c.id) ? " ★" : ""}: ` +
-            `recommended = "${c.recommended}" | detrimental = "${c.detrimental}"`
-        )
-        .join("\n");
-      return `Section ${s.id}: ${s.title}\n${lines}`;
-    })
-    .join("\n\n");
-
-  return [
-    `Rubric (★ = SE Essential — must be green for the conversation to count as SE):\n\n${rubricText}`,
-    practitioner
-      ? `\nThe SE practitioner is identified as: ${practitioner}.`
-      : "\nThe SE practitioner is not identified — infer from the transcript.",
-    `\nTranscript:\n"""\n${transcript}\n"""`,
-    "\nNow score the conversation by calling submit_scores. Include every criterion ID listed in the rubric.",
-  ].join("\n");
-}
-
-function buildScoreTool(rubric) {
-  const allIds = rubric.sections.flatMap((s) => s.criteria.map((c) => c.id));
-  return {
-    name: "submit_scores",
-    description: "Submit the rubric scores for this Street Epistemology conversation.",
-    input_schema: {
-      type: "object",
-      required: ["scores", "narrative"],
-      properties: {
-        practitionerIdentified: {
-          type: "string",
-          description: "Name or short identifier of the SE practitioner you identified, if any.",
-        },
-        narrative: {
-          type: "string",
-          description:
-            "3-5 sentence overall summary: strengths, weaknesses, and whether this counts as SE per the Essentials policy.",
-        },
-        scores: {
-          type: "array",
-          description: "One entry per rubric criterion. Include every ID in the rubric.",
-          items: {
-            type: "object",
-            required: ["id", "value"],
-            properties: {
-              id: { type: "integer", enum: allIds },
-              value: { type: "string", enum: ["green", "grey", "red", "na"] },
-              rationale: { type: "string", description: "1-2 sentences justifying the score." },
-              quote: {
-                type: "string",
-                description: "Short verbatim quote (≤30 words) supporting the score, if applicable.",
-              },
-            },
-          },
-        },
-      },
-    },
-  };
 }

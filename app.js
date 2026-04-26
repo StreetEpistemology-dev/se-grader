@@ -237,6 +237,7 @@ function renderCriterion(c) {
       <div class="detrimental">vs. ${escapeHtml(c.detrimental)}</div>
       ${s.rationale ? `<div class="rationale">${escapeHtml(s.rationale)}</div>` : ""}
       ${s.quote ? `<div class="quote">${escapeHtml(s.quote)}</div>` : ""}
+      ${s.visualCue ? `<div class="visual-cue">👁 ${escapeHtml(s.visualCue)}</div>` : ""}
       <div class="controls">
         <button type="button" data-value="green" class="${s.value === "green" ? "active green" : "green"}">Green</button>
         <button type="button" data-value="grey"  class="${s.value === "grey"  ? "active grey"  : "grey"}">Mixed / NE</button>
