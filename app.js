@@ -109,7 +109,7 @@ async function onSubmit(e) {
   localStorage.setItem("se_grader_backend", backend);
 
   setStep("fetch", "active");
-  els.statusText.textContent = "Fetching transcript…";
+  els.statusText.textContent = "Sending video to Gemini…";
 
   try {
     const res = await fetch(backend.replace(/\/$/, "") + "/analyze", {
@@ -134,7 +134,7 @@ async function onSubmit(e) {
 
     setStep("fetch", "done");
     setStep("analyze", "active");
-    els.statusText.textContent = "Scoring against rubric…";
+    els.statusText.textContent = "Analyzing video & scoring against rubric…";
 
     const data = await res.json();
     setStep("analyze", "done");

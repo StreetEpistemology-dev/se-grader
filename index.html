@@ -56,8 +56,8 @@
     <section class="card hidden" id="status-card" aria-live="polite">
       <div class="loader"><div class="spinner"></div><span id="status-text">Working…</span></div>
       <ol class="progress-steps">
-        <li id="step-fetch">Fetching transcript</li>
-        <li id="step-analyze">Scoring against rubric</li>
+        <li id="step-fetch">Sending video to Gemini</li>
+        <li id="step-analyze">Analyzing video &amp; scoring against rubric (this is the slow part — ~30s)</li>
         <li id="step-render">Preparing results</li>
       </ol>
     </section>
