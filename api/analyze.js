@@ -90,26 +90,30 @@ async function scoreWithGemini({ apiKey, rubric, videoUrl, transcript, practitio
 
   const userParts = [];
   if (videoUrl) {
+    // Gemini's video analysis options live in fileData / videoMetadata. Use
+    // camelCase — newer config keys aren't aliased to snake_case and silently
+    // get ignored if you write them wrong.
     userParts.push({
-      file_data: { file_uri: videoUrl, mime_type: "video/youtube" },
+      fileData: { fileUri: videoUrl, mimeType: "video/youtube" },
+      videoMetadata: { fps: 1 }, // sample 1 frame/sec instead of default — still catches SE pauses
     });
   }
   userParts.push({ text: userPrompt });
 
   const body = {
-    system_instruction: { parts: [{ text: systemPrompt }] },
+    systemInstruction: { parts: [{ text: systemPrompt }] },
     contents: [{ role: "user", parts: userParts }],
-    generation_config: {
-      response_mime_type: "application/json",
-      response_schema: responseSchema,
-      max_output_tokens: 16000,
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseSchema: responseSchema,
+      maxOutputTokens: 8000,
       temperature: 0.2,
       // Lower video resolution → fewer tokens per frame → faster processing.
       // The SE-relevant cues (pauses, eye direction, body language) survive
       // at low res; we don't need fine pixel detail.
-      media_resolution: "MEDIA_RESOLUTION_LOW",
+      mediaResolution: "MEDIA_RESOLUTION_LOW",
       // Cap thinking time so we fit in Vercel Hobby's 60s function budget.
-      thinking_config: { thinking_budget: 2048 },
+      thinkingConfig: { thinkingBudget: 1024 },
     },
   };
 
