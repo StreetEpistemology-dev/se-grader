@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SE Conversation Grader</title>
+  <meta name="description" content="Grade Street Epistemology conversations against the Navigating Beliefs rubric." />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <h1>SE Conversation Grader</h1>
+      <p class="tagline">
+        Paste a YouTube link to a conversation and have it graded against the
+        <a href="https://docs.google.com/spreadsheets/d/1IT40pEfD_xHSBGH5mjw6q2X4eD0DoR-YiaO0zrJ1aUM/edit?gid=1439591124" target="_blank" rel="noopener">SE Conversation Rubric&nbsp;v2.1</a>,
+        with the gold standard taken from <a href="https://www.navigatingbeliefs.com" target="_blank" rel="noopener">Navigating&nbsp;Beliefs</a>.
+      </p>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="card" id="input-card">
+      <form id="grade-form">
+        <label class="field">
+          <span class="field-label">YouTube URL</span>
+          <input
+            type="url"
+            id="video-url"
+            name="videoUrl"
+            placeholder="https://www.youtube.com/watch?v=..."
+            required
+          />
+        </label>
+        <label class="field">
+          <span class="field-label">SE practitioner's name <span class="hint">(optional — helps the grader identify who's practicing SE)</span></span>
+          <input type="text" id="practitioner" name="practitioner" placeholder="e.g., Anthony Magnabosco" />
+        </label>
+        <details class="advanced">
+          <summary>Advanced</summary>
+          <label class="field">
+            <span class="field-label">Or paste transcript directly <span class="hint">(if YouTube auto-fetch fails)</span></span>
+            <textarea id="transcript" name="transcript" rows="6" placeholder="Optional — paste a transcript here to skip YouTube fetch"></textarea>
+          </label>
+          <label class="field">
+            <span class="field-label">Backend URL</span>
+            <input type="url" id="backend-url" name="backendUrl" placeholder="https://your-worker.workers.dev" />
+            <span class="hint">Stored in your browser. Set this to your deployed Cloudflare Worker URL.</span>
+          </label>
+        </details>
+        <div class="actions">
+          <button type="submit" class="btn primary" id="submit-btn">Grade conversation</button>
+          <button type="button" class="btn" id="demo-btn" title="Preview the UI with example scores — no backend needed">Try sample data</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="card hidden" id="status-card" aria-live="polite">
+      <div class="loader"><div class="spinner"></div><span id="status-text">Working…</span></div>
+      <ol class="progress-steps">
+        <li id="step-fetch">Fetching transcript</li>
+        <li id="step-analyze">Scoring against rubric</li>
+        <li id="step-render">Preparing results</li>
+      </ol>
+    </section>
+
+    <section class="card hidden" id="error-card" role="alert">
+      <h2>Something went wrong</h2>
+      <p id="error-message"></p>
+      <p class="hint">Tips: make sure the video is public and has captions, or paste a transcript directly under "Advanced".</p>
+    </section>
+
+    <section class="hidden" id="results">
+      <div class="card summary">
+        <div class="verdict" id="verdict"></div>
+        <div class="grade-block">
+          <div class="grade-letter" id="grade-letter">—</div>
+          <div class="grade-score">
+            <strong id="grade-pct">0%</strong>
+            <span id="grade-detail">0 of 0 criteria scored</span>
+          </div>
+        </div>
+        <div class="meta" id="meta"></div>
+      </div>
+
+      <div class="card">
+        <h2>SE Essentials</h2>
+        <p class="hint">All six must be <strong>green</strong> for the conversation to count as Street Epistemology.</p>
+        <ul class="essentials" id="essentials-list"></ul>
+      </div>
+
+      <div class="card">
+        <h2>Section breakdown</h2>
+        <div id="sections"></div>
+      </div>
+
+      <div class="card">
+        <h2>Reviewer notes</h2>
+        <p class="hint">The AI's overall narrative and any flags worth a human looking at.</p>
+        <div id="ai-notes" class="ai-notes"></div>
+      </div>
+
+      <div class="actions">
+        <button type="button" class="btn" id="copy-json">Copy raw JSON</button>
+        <button type="button" class="btn" id="new-grade">Grade another conversation</button>
+      </div>
+    </section>
+
+    <footer class="site-footer">
+      <p>
+        Built for <a href="https://streetepistemologyinternational.org" target="_blank" rel="noopener">Street Epistemology International</a>.
+        Rubric by Nathan Hartman with Pierce Watkins, Sjoshuan, and Jamie. Gold-standard practice as defined by
+        <a href="https://www.navigatingbeliefs.com" target="_blank" rel="noopener">Navigating Beliefs</a>.
+      </p>
+    </footer>
+  </main>
+
+  <script src="./rubric.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>

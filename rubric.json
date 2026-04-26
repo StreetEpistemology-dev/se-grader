@@ -1,0 +1,91 @@
+{
+  "title": "SE Conversation Rubric (v2.1)",
+  "source": "https://docs.google.com/spreadsheets/d/1IT40pEfD_xHSBGH5mjw6q2X4eD0DoR-YiaO0zrJ1aUM/edit?gid=1439591124",
+  "createdBy": "Nathan Hartman, with Pierce Watkins, Sjoshuan, and Jamie",
+  "goldStandard": "https://www.navigatingbeliefs.com",
+  "scoring": {
+    "values": {
+      "green": 1.0,
+      "grey": 0.5,
+      "red": 0.0,
+      "na": null
+    },
+    "labels": {
+      "green": "Recommended practice used",
+      "grey": "Mixed practice or insufficient evidence",
+      "red": "Inappropriate practice used",
+      "na": "Not applicable"
+    },
+    "essentialPolicy": "All Essentials must score green to be considered successful Street Epistemology. A grey or red on any Essential disqualifies the conversation as SE."
+  },
+  "essentialIds": [1, 17, 18, 19, 37, 38],
+  "sections": [
+    {
+      "id": 1,
+      "title": "Getting Consent, Identifying and Clarifying the Claim, & Confidence Level",
+      "criteria": [
+        { "id": 1, "recommended": "Obtains informed consent to have the conversation", "detrimental": "Forces the conversation on or deceives the conversation partner regarding the nature of the conversation" },
+        { "id": 2, "recommended": "Settles on an important or interesting fact-based or normative claim", "detrimental": "Settles on a trivial, obvious, or personal preference based claim" },
+        { "id": 3, "recommended": "Asks for confidence using a scale (can be numeric or verbal)", "detrimental": "Imposes a specific confidence scale, even when the conversation partner is uncomfortable with it" },
+        { "id": 4, "recommended": "Asks for clarification of terms", "detrimental": "Imposes their own definitions rather than using their conversation partner's definitions" }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Identifying Main Reasons",
+      "criteria": [
+        { "id": 5, "recommended": "Asks why their conversation partner is at their stated confidence level", "detrimental": "Assumes the reasons why their conversation partner is at their stated confidence level" },
+        { "id": 6, "recommended": "Utilizes real-reason checks to confirm that reasons given support confidence", "detrimental": "Wastes time and energy critically examining reasons that do not support confidence" }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Evaluating the Quality of Reasoning",
+      "criteria": [
+        { "id": 7, "recommended": "Asks questions related to how their conversation partner forms beliefs", "detrimental": "Exclusively asks questions related to what and why, but not how" },
+        { "id": 8, "recommended": "Asks their conversation partner to generate alternative explanations", "detrimental": "Provides alternative explanations unprompted" },
+        { "id": 9, "recommended": "Asks if a reason is relevant to the claim", "detrimental": "Tells their conversation partner that their reason is irrelevant to the claim" },
+        { "id": 10, "recommended": "Asks if a reason is strong enough to support the confidence level", "detrimental": "Tells their conversation partner that their reason is not strong enough to support their confidence level" },
+        { "id": 11, "recommended": "Asks if the premises supporting a claim or reason are true", "detrimental": "Tells their conversation partner that the premises supporting their claim or reason are not true" },
+        { "id": 12, "recommended": "Asks about the testability of the claim or reasons", "detrimental": "Tells their conversation partner that their claim or reasons are untestable" },
+        { "id": 13, "recommended": "Asks what could increase and/or decrease the conversation partner's confidence", "detrimental": "Tells their conversation partner what should increase and/or decrease their confidence" },
+        { "id": 14, "recommended": "Asks if anything could show the belief to be false IF it is false", "detrimental": "Asserts that their conversation partner has no way to show the belief to be false if it is false" },
+        { "id": 15, "recommended": "Asks if someone else could use the same reason(s) for a different belief (outsider test)", "detrimental": "Asserts that other people use the same reasoning to believe things that are false" },
+        { "id": 16, "recommended": "Explores how their conversation partner conceptualizes and values truth if appropriate", "detrimental": "Allows relativistic thinking to go un-challenged" },
+        { "id": 17, "recommended": "Attempts to understand the underlying reasons and methods behind their interlocutor's beliefs", "detrimental": "Assumes the underlying reasons and methods behind their conversation partner's beliefs" },
+        { "id": 18, "recommended": "Asks mostly open-ended, thought-provoking questions utilizing the Socratic method", "detrimental": "Asks many closed-ended or leading questions" },
+        { "id": 19, "recommended": "Encourages deep thinking and self-reflection, especially regarding the quality of reasoning", "detrimental": "Asks only surface level questions or otherwise fails to investigate the conversation partner's epistemology" }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Building and Maintaining Rapport",
+      "criteria": [
+        { "id": 20, "recommended": "Listens carefully and repeats back to avoid misrepresenting their conversation partner", "detrimental": "Misrepresents or strawmans their conversation partner" },
+        { "id": 21, "recommended": "Puts the burden for understanding and rapport on themselves", "detrimental": "Puts the burden for communicating clearly and maintaining rapport on their conversation partner" },
+        { "id": 22, "recommended": "Controls their body language and tone", "detrimental": "Communicates negative dispositions or attitudes through body language and/or tone" },
+        { "id": 23, "recommended": "Shows appreciation or offers praise to their conversation partner", "detrimental": "Expresses disappointment or judgment toward their conversation partner" },
+        { "id": 24, "recommended": "Provides their opinion or view when the interlocutor asks for it (or at the end of the conversation)", "detrimental": "Shares their own unsolicited opinions or imposes their own view" },
+        { "id": 25, "recommended": "Uses neutral terms and avoids common triggers", "detrimental": "Uses sensitive or offensive language" },
+        { "id": 26, "recommended": "Uses common language and layman's terms where possible", "detrimental": "Uses unnecessary jargon and technical terminology" },
+        { "id": 27, "recommended": "Avoids interrupting or only interrupts when necessary to keep the conversation on track", "detrimental": "Interrupts frequently or when it is inappropriate" },
+        { "id": 28, "recommended": "Asks clear, concise, and easily understood questions", "detrimental": "Asks long, complicated, or confusing questions" },
+        { "id": 29, "recommended": "Moves quickly enough to avoid boredom, but not so fast as to be overwhelming", "detrimental": "Progresses the conversation too quickly or too slowly" },
+        { "id": 30, "recommended": "Respects their conversation partner's time", "detrimental": "Shows a lack of respect for their conversation partner's time" }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Ending the Conversation & Post-Conversation Evaluations",
+      "criteria": [
+        { "id": 32, "recommended": "Asks if their conversation partner's confidence has changed", "detrimental": "Tells their conversation partner that they should change their confidence" },
+        { "id": 33, "recommended": "Asks for their conversation partner's opinion on how the conversation went", "detrimental": "Tells their conversation partner how the conversation went" },
+        { "id": 34, "recommended": "Offers their conversation partner an opportunity to ask them questions", "detrimental": "Refuses to answer questions posed by their conversation partner" },
+        { "id": 35, "recommended": "Used collaborative language throughout the conversation", "detrimental": "Used confrontational or combative language" },
+        { "id": 36, "recommended": "Treated their conversation partner charitably throughout the conversation", "detrimental": "Treated their conversation partner uncharitably" },
+        { "id": 37, "recommended": "Appeared to have the goal of exploring beliefs rather than changing them directly", "detrimental": "Appeared to have the goal of changing their interlocutor's beliefs directly rather than exploring their beliefs" },
+        { "id": 38, "recommended": "Maintained civility throughout the conversation", "detrimental": "Conversation deteriorated to the point where it ends on poor terms" }
+      ]
+    }
+  ]
+}
